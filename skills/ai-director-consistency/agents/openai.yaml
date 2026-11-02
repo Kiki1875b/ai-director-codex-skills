@@ -1,0 +1,4 @@
+interface:
+  display_name: "캐릭터·배경 일관성"
+  short_description: "바이블 앵커, 기준 사진, 캐릭터·배경·씬 시트"
+  default_prompt: "Use $ai-director-consistency to build a character sheet from a reference photo."

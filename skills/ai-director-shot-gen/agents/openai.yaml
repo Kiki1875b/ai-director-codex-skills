@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI 샷 생성"
+  short_description: "image_gen으로 시트·키프레임 생성, 애니매틱, 버전 관리"
+  default_prompt: "Use $ai-director-shot-gen to generate keyframes for the next storyboard shots."

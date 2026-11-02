@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI 시나리오 작가"
+  short_description: "장르 추천→질문→단계별 집필→별도 리뷰→story.json"
+  default_prompt: "Use $ai-director-writer to write a professional screenplay for an AI film."

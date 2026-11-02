@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI 영상 편집·렌더"
+  short_description: "타임라인, 트랜지션, 자막, 음향, ffmpeg 렌더"
+  default_prompt: "Use $ai-director-edit to assemble the shots and render the final mp4."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI 디렉터"
+  short_description: "시나리오부터 시트·키프레임·편집·렌더까지 AI 영화 제작"
+  default_prompt: "Use $ai-director to direct a short AI film from idea to rendered mp4."
