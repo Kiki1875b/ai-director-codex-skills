@@ -1,23 +1,32 @@
 # 프롬프트 예시
 
-창작 예시다. 바이블은 `ai-director-consistency/references/bible-template.md`의 미나와 골목을 쓴다.
+창작 예시다. 바이블은 `<skills>/ai-director-consistency/references/bible-template.md`의 미나와 골목을 쓴다. 줄 순서와 LOOK 블록은 SKILL.md 2절, 근거는 `<skills>/ai-director-consistency/references/anti-slop.md`.
 
 ## S1-1: 우산을 펼치는 컷 (image2video)
 
 **키프레임**
+- 참조: `character_image1=refs/ch_mina_face_v1.png`, `character_image2=refs/ch_mina_front.png`, `env_image1=refs/wd_alley_wide_v1_darkA.png`, `object_image1=refs/ob_umbrella.png`
 ```
-late-20s Korean woman, slim build, short straight black bob with blunt bangs, round thin silver glasses, small mole under left eye, mustard-yellow vinyl raincoat over grey hoodie,
-holding a transparent dome umbrella with glossy red J-handle, closed, in her left hand,
-narrow Seoul back alley at night, wet asphalt reflecting pink and cyan neon, stacked AC units, light rain,
-she looks up at the rain, medium shot, eye level, 35mm,
-neon rim light from frame right, cinematic live-action, 35mm anamorphic, shallow depth of field, teal-and-amber grade, light film grain
-negative: on-screen text, watermark, extra fingers, duplicated people
+Landscape 16:9 single film frame.
+Image roles: character_image1 = identity of the woman (face, hair, glasses) — match exactly. character_image2 = her costume only.
+env_image1 = THE LOCATION: reproduce this exact alley, its look, colors and lighting. object_image1 = the umbrella.
+Blocking and camera: she stands on the wet alley floor about 3 m from camera, on the right third, body turned three-quarters
+to camera left, physically inside the space at the correct scale; medium shot at eye level, 40mm; a stack of plastic crates
+out of focus in the left foreground.
+Action: she has just stopped walking and looks up at the rain past the lens, the closed umbrella hanging from her left hand.
+late-20s Korean woman, slim build, short straight black bob with blunt bangs, round thin silver glasses, small mole under left eye,
+mustard-yellow vinyl raincoat over grey hoodie. Prop: transparent dome umbrella with glossy red J-handle, closed.
+Location: narrow back alley in Euljiro, Seoul at night in light rain … (월드 앵커 원문)
+LIGHTING: the cold white LED security lamp on the utility pole above and behind-left of her edges her hair and the top of the
+raincoat; a fluorescent window on the second floor gives a soft key on the left side of her face. No other light.
+LOOK (whole frame): photorealistic film still … (anti-slop.md 3절 원문)
+negative: [style.negative]
 ```
 
 **모션**
 ```
 She raises the closed umbrella and pops it open overhead in one smooth motion; raindrops bead and slide on the clear dome;
-slow push-in from medium to medium close-up; calm pace; steady rain and neon flicker in the background.
+slow push-in from medium to medium close-up; calm pace; steady thin rain crossing the lamp light.
 Ends with the umbrella fully open, held in her right hand, her gaze turning to frame right.
 ```
 
@@ -30,9 +39,9 @@ She steps forward toward frame right under the open umbrella; puddles splash sof
 camera tracks alongside at walking pace, static height. Ends with her pausing at a lit doorway.
 ```
 
-## S2-1: 두 인물이 나오는 컷 (reference2video)
+## S2-1: 두 인물이 나오는 컷 (두 인물이 모두 들어간 키 + 첫·끝 키)
 
-- 참조: `refs/ch_mina_front.png`, `refs/ch_jun_front.png`, `refs/wd_alley_wide.png`
+- 참조: `refs/ch_mina_face_v1.png`, `refs/ch_jun_face_v1.png`, `refs/wd_alley_wide_v1_darkA.png`
 ```
 Mina (yellow raincoat, left side of frame) hands the red-handled umbrella to Jun (right side of frame); Jun hesitates, then takes it;
 static two-shot, eye level; light rain; ends with Jun holding the umbrella, Mina's hands empty.

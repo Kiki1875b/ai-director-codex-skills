@@ -4,10 +4,11 @@ Usage:
   python render_timeline.py story.json -o export/final.mp4 [--dry-run] [--preview]
                             [--font C:/Windows/Fonts/malgun.ttf] [--font-size 48]
 
-Model (mirrors the OpenArt Director timeline schema):
+Model (story.json timeline schema):
   - main video = enabled clips on the video track with the lowest `order`
   - clip length = (source_out_ms - source_in_ms) / speed; images are held for that length
-  - gaps before a clip become black; transition_in overlaps the previous clip (xfade)
+  - clips sit at timeline_start_ms; gaps become black; a clip that starts before the previous one ends
+    must carry a transition_in whose duration equals the overlap (+-1 ms), else the render is refused
   - audio = original audio of video clips (placed where the clip lands) + every audio track clip
     (placed at timeline_start_ms), mixed without normalization
   - text clips become drawtext captions
@@ -21,6 +22,28 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "ai-director" / "scripts"))
+from validate_story import validate  # noqa: E402
+import ledger  # noqa: E402
+
+
+def export_gate(doc, base, preview, allow_reason):
+    """Final renders must pass the export validation (only shots the cut uses). Preview renders only warn.
+    --allow-unvalidated "<reason>" renders anyway and records the reason in the story ledger."""
+    errors, _, _ = validate(doc, stage="export", base=base)
+    if not errors:
+        return True
+    head = "\n  ".join(errors[:15]) + (f"\n  ... {len(errors) - 15} more" if len(errors) > 15 else "")
+    if preview:
+        print(f"[preview] {len(errors)} export error(s) ignored for preview:\n  {head}", file=sys.stderr)
+        return False
+    if allow_reason:
+        print(f"[override] rendering with {len(errors)} export error(s): {allow_reason}", file=sys.stderr)
+        return False
+    ledger.record(str(Path(base) / "export" / "render"), "render_blocked", errors=len(errors))
+    sys.exit(f"export validation failed ({len(errors)} error(s)); nothing rendered:\n  {head}\n"
+             f"Fix them, render with --preview, or pass --allow-unvalidated \"<reason>\" if the user asked for this render.")
+
 XFADE = {
     "dissolve": lambda d: "dissolve",
     "fade": lambda d: "fadeblack",
@@ -30,6 +53,7 @@ XFADE = {
     "iris": lambda d: "circleclose" if d == "in" else "circleopen",
     "zoom": lambda d: "zoomin",
 }
+OVERLAP_TOL_S = 0.001
 DEFAULT_FONT = "C:/Windows/Fonts/malgun.ttf"
 
 
@@ -99,8 +123,13 @@ def build(doc, base, out_path, preview, font, font_size, tmpdir):
     if not vclips:
         sys.exit("main video track has no enabled clips")
 
-    norm = (f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
-            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={fps},format=yuv420p,settb=AVTB")
+    # export.fit: "pad" (default, letterbox/pillarbox) or "crop" (fill and cut the overflow, centred).
+    # 2.39:1 films generate 16:9 clips and crop them to 2.39 here (references/aspect-ratios.md).
+    if doc.get("export", {}).get("fit", "pad") == "crop":
+        fitf = f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
+    else:
+        fitf = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
+    norm = f"{fitf},setsar=1,fps={fps},format=yuv420p,settb=AVTB"
     acc_label, acc_len, seg_no = None, 0.0, 0
 
     prev_len = 0.0
@@ -114,7 +143,7 @@ def build(doc, base, out_path, preview, font, font_size, tmpdir):
         out = f"j{seg_no}"
         seg_no += 1
         if transition:
-            d = min(overlap, prev_len, length) * 0.999
+            d = overlap
             kind = XFADE[transition["type"]](transition.get("direction"))
             filters.append(f"[{acc_label}][{label}]xfade=transition={kind}:duration={d:.3f}:offset={acc_len - d:.3f}[{out}]")
             start = acc_len - d
@@ -134,17 +163,19 @@ def build(doc, base, out_path, preview, font, font_size, tmpdir):
         offset = c["timeline_start_ms"] / 1000 - acc_len
         transition = c.get("transition_in") if acc_label is not None else None
         overlap = 0.0
-        if transition:
-            tdur = transition.get("duration_ms", 500) / 1000
-            overlap = min(tdur, -offset) if offset < -0.04 else 0.0
-            if overlap <= 0:
-                print(f"WARN {c['id']}: transition_in ignored (clip does not overlap the previous clip; "
-                      f"set timeline_start_ms = previous end - transition)", file=sys.stderr)
-                transition = None
-        elif offset < -0.04 and acc_label is not None:
-            print(f"WARN {c['id']}: overlaps the previous clip by {-offset:.2f}s without a transition; "
-                  f"placed right after it", file=sys.stderr)
-        if offset > 0.04 and not transition:
+        if acc_label is not None and offset < -OVERLAP_TOL_S:
+            tdur = transition.get("duration_ms", 0) / 1000 if transition else 0.0
+            if abs(-offset - tdur) > OVERLAP_TOL_S:
+                sys.exit(f"{c['id']}: overlap {-offset * 1000:.0f} ms does not match transition {tdur * 1000:.0f} ms "
+                         f"(set timeline_start_ms = previous clip end - transition duration)")
+            if -offset > min(prev_len, length) + OVERLAP_TOL_S:
+                sys.exit(f"{c['id']}: transition {tdur * 1000:.0f} ms is longer than the clips it joins")
+            overlap = min(-offset, prev_len, length)
+        elif transition:
+            print(f"WARN {c['id']}: transition_in ignored (clip does not overlap the previous clip; "
+                  f"set timeline_start_ms = previous end - transition)", file=sys.stderr)
+            transition = None
+        if offset > OVERLAP_TOL_S and not transition:
             filters.append(f"color=c=black:s={width}x{height}:r={fps}:d={offset:.3f},format=yuv420p,setsar=1,settb=AVTB[gap{i}]")
             join(f"gap{i}", offset)
         if kind == "image":
@@ -226,6 +257,8 @@ def main():
     ap.add_argument("--preview", action="store_true", help="fast 540p render")
     ap.add_argument("--font", default=DEFAULT_FONT)
     ap.add_argument("--font-size", type=int, default=48)
+    ap.add_argument("--allow-unvalidated", metavar="REASON",
+                    help="final render despite export validation errors (only when the user asked); reason goes to the ledger")
     args = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
@@ -237,6 +270,9 @@ def main():
     ext = doc.get("export", {}).get("file_format", "mp4")
     out = Path(args.output) if args.output else base / "export" / f"final{'_preview' if args.preview else ''}.{ext}"
     out.parent.mkdir(parents=True, exist_ok=True)
+    validated = True
+    if not args.dry_run:
+        validated = export_gate(doc, base, args.preview, args.allow_unvalidated)
 
     with tempfile.TemporaryDirectory() as tmp:
         cmd, total = build(doc, base, out, args.preview, args.font, args.font_size, tmp)
@@ -246,7 +282,13 @@ def main():
         print(f"rendering {total:.2f}s → {out}")
         res = subprocess.run(cmd)
         if res.returncode:
+            if not args.preview:
+                ledger.record(str(base / "export" / out.name), "render_fail", code=res.returncode, validated=validated,
+                              override_reason=None if validated else args.allow_unvalidated)
             sys.exit(f"ffmpeg failed with code {res.returncode}")
+    if not args.preview:
+        ledger.record(str(base / "export" / out.name), "render", out_file=str(out), validated=validated,
+                      override_reason=None if validated else args.allow_unvalidated, seconds_total=round(total, 2))
     print(f"done: {out}")
 
 

@@ -1,6 +1,6 @@
 ---
 name: ai-director-shot-gen
-description: Use when turning a storyboard shot into generation jobs — choosing the mode (text2image, image2image, text2video, image2video, reference2video/element2video, extend, modify, voice, music), writing keyframe and motion prompts, managing shot versions and the active version, and gating paid generations behind user approval. 한국어 트리거는 샷 생성, 컷별 프롬프트, 이미지투비디오, 레퍼런스 영상 생성, 다시 생성, 버전 관리, 영상 프롬프트 작성. Part of the ai-director skill set.
+description: Use when turning a storyboard shot into generation jobs — choosing how to generate (Codex image keys and edits, LTX/Wan image2video with start/end keys, voice, music), writing keyframe and motion prompts, managing shot versions and the active version, and gating paid generations behind user approval. 한국어 트리거는 샷 생성, 컷별 프롬프트, 이미지투비디오, 레퍼런스 영상 생성, 다시 생성, 버전 관리, 영상 프롬프트 작성. Part of the ai-director skill set.
 ---
 
 > **경로:** `<skills>` = 이 SKILL.md가 있는 폴더의 상위 폴더(Codex 스킬 폴더). 스킬 안에서 `scripts/…`, `references/…`라고만 쓴 경로는 그 스킬 폴더 기준이다. 작업 폴더는 영상 프로젝트 루트(`stories/`가 있는 곳)다.
@@ -9,37 +9,50 @@ description: Use when turning a storyboard shot into generation jobs — choosin
 
 # 샷 생성 (Shot Generation)
 
-OpenArt는 생성 기능을 `모델:모드` 형식의 ID로 부른다. 예: `gpt-image-2:text2image`, `gemini-omni-flash:image2video`, `byte-plus-seedance-2-5:extendVideo`. 생성은 비동기 작업(history ID)으로 돌고, 끝나면 샷의 **version**으로 붙는다. 이 스킬은 그 흐름을 쓰는 도구에 상관없이 재현한다.
+생성 결과는 샷의 **version**으로 붙는다. 이전 version은 지우지 않는다.
 
-## 1. 모드 고르기
+## 1. 방식 고르기
 
 | 샷 성격 | 1단계 | 2단계 |
 |---|---|---|
-| 바이블 인물이 나오는 일반 컷 | image2image(참조 시트) → 키프레임 | image2video |
-| 인물 2명 이상, 또는 소품과 배경이 모두 중요한 컷 | 키프레임(선택) | reference2video / element2video (참조 여러 장) |
-| 앞 샷에서 동작이 이어지는 컷 | 앞 샷 마지막 프레임 추출 | image2video (첫 프레임으로 사용) |
-| 롱테이크, 길이 연장 | — | extend |
-| 일부만 틀린 기존 영상 | — | modify (수정 지시만) |
-| 인물이 없는 풍경, 인서트, 추상 이미지 | — | text2video도 허용 |
-| 내레이션, 대사 | 대사 확정 | 음성 생성(고정 voice_id) → 필요하면 lipsync |
-| 배경음악 | 무드, BPM, 길이 결정 | 음악 생성 또는 라이선스 음원 |
+| 얼굴이 크게 나오는 인물 컷(클로즈업·미디엄) | 키프레임 + 끝 키(내장 image_gen) | LTX 첫·끝 키(`ltx_remote.py --end-image`) |
+| 대사 컷(입이 보임) | 음성 확정 → 키·끝 키 | LTX 첫·끝 키 + `--audio` |
+| 얼굴이 작고 공간을 지나는 큰 동작 | 키프레임 | 시작 1장 image2video (`model-capabilities.md`에서 모델 선택) |
+| 인물 2명 이상 | 두 인물이 모두 들어간 키프레임(더티 싱글 포함) | 위 행의 얼굴 크기·동작 조건으로 고른다(인원수만으로 정하지 않음) |
+| 정지 사진·그림 인서트 | 키프레임 | ffmpeg zoompan(사진 속이 움직이지 않게) |
+| 움직일 것이 비·작은 광원뿐인 와이드 | 키프레임 | 작품이 합성으로 정한 효과는 합성. 그 밖에는 모델 표 확인(Wan은 비·작은 광원 실패 확인됨) |
+| 인물이 없는 풍경 | 키프레임 | image2video (현재 래퍼는 `--image` 필수. text2video는 로컬 실행 경로 미확인) |
+| 내레이션·대사 | 대사 확정 | 음성 생성(고정 voice_id) |
+| 배경음악 | 무드·BPM·길이 결정 | 음악 생성 또는 라이선스 음원 (기본·실패 기록: `ai-director-edit/references/audio-generation.md`) |
 
-어떤 모델과 모드를 쓸 수 있는지는 사용자가 가진 도구로 정한다. 쓸 수 있는 모델, 샷 최대 길이, 가격은 그 도구의 현재 문서에서 읽는다. 기억이나 추측으로 단정하지 않는다.
+모델별로 확인된 능력·실패·시간은 [model-capabilities.md](references/model-capabilities.md)에 있다. 표에 없는 조합은 미확인으로 다룬다.
 
 ## 2. 프롬프트 작성
 
-**키프레임(이미지)** 구조:
-```
-[캐릭터 앵커 원문] + [오브젝트 앵커] + [월드 앵커] +
-[한 행동: 가장 잘 읽히는 순간에서 멈춘 상태] + [샷 크기/앵글/렌즈] + [조명/시간대] + [스타일 앵커]
-negative: [style.negative]
-```
+**키프레임 생성 전 입력.** 새 컷이나 시선·연결을 바꾸는 컷은 `ai-director-scene-direction`의 scene.direction과 `ai-director-cinematography` 0·2-1절의 shot.staging/cut_link를 먼저 읽는다. 단독 컷 요청도 기존 앞뒤 컷이 있으면 그 연결을 포함한다. 시선 목표·높이·대화축·카메라·관객 관심점의 관계가 미확정이면 해당 키를 만들기 전에 블록아웃 설계를 보완한다. 이 단계의 계획 점검은 실제 영상 검수 pass가 아니다.
 
-**영상(모션)** 구조. 정체성 묘사는 참조 이미지가 맡으므로 프롬프트에는 **움직임만** 쓴다.
+**키프레임(이미지)** 구조. 줄 순서를 지킨다(AI 슬롭 방지 근거는 `<skills>/ai-director-consistency/references/anti-slop.md`):
 ```
-[무엇이 어떻게 움직이는지: 시작 상태 → 끝 상태] + [카메라 움직임] + [속도/리듬] +
-[환경 움직임: 비, 연기, 천] + [소리 단서(오디오를 지원하는 모델만)]
+1. 형식: 작품 화면비의 문장(`ai-director/references/aspect-ratios.md`). 예: "Landscape 16:9 single film frame." / "Portrait 9:16 single film frame." / 2.39:1은 16:9 + 가운데 띠 구도 문장
+2. Image roles: character_image1 = identity (face) — match exactly / character_image2 = costume only /
+   env_image1 = THE LOCATION: reproduce this exact place, look, colors, lighting / object_image1 = <prop>
+3. 블로킹·카메라: 인물이 공간 어디에(카메라에서 몇 m, 3분할 어느 쪽, 몸 방향) + 샷 크기/앵글/렌즈
+   + "physically inside the space at the correct scale" + 전경 가림(어깨, 셔터 가장자리 등)
+   + 시선 목표의 실제 위치·높이와 화면상 방향(shot.staging에서), 다음 컷으로 관심을 넘길 대상의 화면 위치
+4. 한 행동: 컷의 시작 상태와 다음 행동이 읽히는 순간. 감정 단어 대신 자세·지정 목표를 향한 시선·손으로 쓴다
+5. 앵커 원문: 캐릭터 / 오브젝트 / 월드 + 상태(젖음 등)
+6. LIGHTING: 장면의 실제 광원마다 위치와 닿는 부위, 마지막에 "No other light."
+7. LOOK 블록(anti-slop.md 3절 원문, 글자 그대로) + negative
 ```
+- 참조: 얼굴 기준(`ref_images[0]`) → `character_image1`, 전신 의상 기준 → `character_image2`, 룩 확정 때 밝기 보정한 배경 기준 → `env_image1`. 옛 룩의 씬 시트는 넣지 않는다(질감이 옮는다). 5장 이내.
+- `cinematic`, `melancholic`, `neon glow`, `teal-and-amber`, `wet reflections everywhere` 같은 분위기 단어를 쓰지 않는다.
+- **룩 확정 게이트**(`ai-director-consistency` 1-1)를 통과하기 전에는 키프레임을 대량으로 만들지 않는다.
+- **밤 실외 키·판**은 `<skills>/ai-director-consistency/references/anti-slop.md` 4-8을 따른다: 광원마다 빛이 닿는 범위와 그 밖의 어둠을 쓰고, 생성 뒤 도로 밝기를 선형 휘도로 재서 등 아래 대비 감쇠를 확인한다. 전체 노출만 낮추지 않는다.
+
+**키프레임 절차 (필수, 2026-11-08 사용자 결정).** 키를 만들 때마다 [references/keyframe-procedure.md](references/keyframe-procedure.md)를 처음부터 따른다. 순서만 적으면:
+0 장소를 Blender로 먼저 설계(세트 없는 장소의 키는 만들지 않음) → 1 실제 광원만 켠 조명 가이드 렌더, 인물 밝은 면 한 줄 → 2 가이드를 `LIGHTING GUIDE`로 넣고 원판에서 한 번만 편집, 요구를 프롬프트/그림/보정으로 나눔, 후보 3~4장, `precheck_key.py` 사전 점검 → 3 키마다 새 `keyframe-reviewer`로 채점(만든 쪽이 통과시키지 않음) → 4 가장 작은 수단으로 고치기, **최대 3회** → 5 PASS이고 절차를 지킨 키만 사용자에게. 최종 판정은 사용자다(루트 `CLAUDE.md` 5절).
+
+**영상(모션)** 프롬프트는 키 생성 전에 확정한 `ai-director-cinematography`의 촬영 설계와 6절 `[camera]` 요약을 이어받는다. 샷 크기·렌즈·방향을 이 단계에서 임의로 바꾸지 않는다. 샷 연결(루트 `CLAUDE.md` 3절)과 생성 방식(이 문서 1·4절)은 실제 모델·작품 규칙에 맞춰 확인한다. 인물의 시선이 바뀌면 대상과 순서를 쓴다. 정체성 묘사는 참조 이미지가 맡으므로 프롬프트에는 **일어나는 일만** 쓴다. 형식은 모델별 레시피를 따른다: LTX(기본) [references/ltx.md](references/ltx.md), Wan [references/wan.md](references/wan.md).
 
 규칙:
 - 한 샷에는 행동 하나만 넣는다. 끝 상태는 story.json의 `end_state`와 같아야 한다.
@@ -78,6 +91,7 @@ negative: [style.negative]
 | 참조 시트, 키프레임, 씬 프로덕션 시트, 이미지 수정 | 내장 `image_gen` (아래 절차) |
 | 영상 (video 모델이 없을 때) | `<skills>/ai-director-shot-gen/scripts/animate_still.py`로 키프레임에 카메라 무브를 준 애니매틱 |
 | 체인용 마지막 프레임 | ffmpeg (`ai-director-consistency` 3절) |
+| 밤 장면 노출 낮추기(룩 확정·렌더) | `<skills>/ai-director-shot-gen/scripts/night_exposure.py` (광원 하이라이트 유지, `--compare`로 단계 비교) |
 
 **image_gen 호출 절차** — 일관성은 앵커 원문에 달려 있으므로 프롬프트를 확정한 뒤 **한 글자도 바꾸지 않고** 보낸다.
 1. 참조 이미지를 라벨과 함께 정한다: `character_image1..3`, `env_image1`, 소품 `object_image1`. 이번 작업에서 처음 다루는 이미지는 `view_image`로 한 번 확인한다.
@@ -103,6 +117,16 @@ python "<skills>/ai-director-shot-gen/scripts/animate_still.py" \
 - `--move`는 샷의 `camera`에 맞춘다: push-in / pull-out / pan-left·right·up·down / static.
 - 키프레임 화면비가 출력과 다르면 경고가 나온다. 키프레임을 출력 화면비로 다시 만들거나 `--fit pad|blur`를 쓴다(기본 crop은 가장자리를 잘라낸다).
 
+
+**검수와 기록** (정지 프레임 중심 검수를 시간축 검수로 바꿈, 2026-11-08)
+- 생성 **전에** shot `success_criteria`(시작·진행·완료·연속성·정체성·카메라)를 관찰 가능한 문장으로 적는다. 방식 선택은 [model-capabilities.md](references/model-capabilities.md)를 본다.
+- 생성 **뒤에** 리뷰어(새 컨텍스트 하위 에이전트 또는 별도 `codex exec` 세션, 지시문은 `<skills>/ai-director-consistency/references/video-reviewer.md` 전문)가 `<skills>/ai-director-consistency/references/video-rubric.md`로 검수한다: `review_video.py`로 0.5초 간격 접촉 시트·얼굴 스트립·움직임/밝기/이음매 후보를 만들고, 후보 구간을 촘촘히 다시 보고, 시간대별 결함과 판정(pass/revise/hold)을 version `review`에 남긴다. 만든 쪽이 스스로 합격시키지 않는다.
+- 영상도 개선(재생성·후처리 수정)은 **최대 3회**다. 3회째에도 pass가 아니면 멈추고 사용자에게 보고한다. 사용자가 명시적으로 지시한 재생성(예: "시드 바꿔 재생성", "프롬프트 정리해서 넣어봐")은 회차에 넣지 않는다(사용자 2026-11-10).
+- 정지 프레임과 수치만으로 동작을 합격시키지 않는다. 움직임의 자연스러움은 사용자가 재생으로 본 판정이 있어야 pass다. 그 전에는 사용자에게 "검수 후보: 미확인 항목 …"으로 보낸다.
+- 결과는 story.json version(`kind:"video"`, `status`, `notes`에 설정과 문제, `review`에 검수 결과)에 기록한다. 실패는 `failed`, 대체는 `superseded`.
+- 애니매틱 클립도 같은 절차로 검수한다. 카메라 무브만 있으므로 `success_criteria`는 카메라·정체성·연속성 중심으로 쓴다.
+- 사용자에게는 한 컷씩 보낸다.
+
 ### 그 밖의 도구
 
 - 다른 로컬 도구(ComfyUI, 로컬 SD 등)나 API가 있으면 실행하고, 결과를 `stories/<slug>/media/`에 저장한다.
@@ -112,7 +136,7 @@ python "<skills>/ai-director-shot-gen/scripts/animate_still.py" \
   {"id":"S1-1-v2","kind":"video","model":"…","mode":"image2video","prompt":"…","seed":null,
    "inputs":["media/S1-1-key-v1.png"],"media_url":"media/S1-1-v2.mp4","status":"done","notes":"v1은 우산 손이 바뀜"}
   ```
-- 검수를 통과한 version은 `active_version_id`로 지정한다. 그 샷의 타임라인 클립에서는 `media_url`만 갈아끼우고 클립 ID와 위치는 유지한다. 새 영상 길이가 다르면 source_out_ms를 조정한다.
+- `review.status`가 `pass`인 version만 `active_version_id`로 지정한다(`validate_story.py --stage export`가 막는다). 그 샷의 타임라인 클립에서는 `media_url`만 갈아끼우고 클립 ID와 위치는 유지한다. 새 영상 길이가 다르면 source_out_ms를 조정한다.
 - 실패나 거절은 `status:"failed"`와 사유를 남긴다. 같은 실패를 반복하지 않도록 다음 시도의 변경점을 notes에 적는다.
 
 ## 5. 다시 생성할 때

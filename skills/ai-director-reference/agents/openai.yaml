@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI 레퍼런스 수집"
+  short_description: "구도·촬영 기법, 배경, 분위기 레퍼런스를 출처·측정 증거와 함께 기록"
+  default_prompt: "Use $ai-director-reference to collect tilt-up, location and mood references for the next scene."

@@ -11,11 +11,10 @@
 사용자 요구: {answers}   피할 것: {avoid}
 원칙: craft-rules.md 1~6절. 제작 제약: craft-rules.md 7절.
 장르 플레이북: {genre_playbook_section}
-오픈아트식 유형 지시(라이브 액션 단편일 때): "광고·트레일러·UGC가 아니라 실사 단편이다.
+유형 지시(라이브 액션 단편일 때): "광고·트레일러·UGC가 아니라 실사 단편이다.
 실제 공간, 동기 있는 조명, 믿을 수 있는 연기, 분명한 극적 척추를 쓰고 영화 문법을 유지한다."
 ```
 
-마지막 줄은 OpenArt Director 퀵스타트의 `[Type: LIVE_ACTION_FEATURE_OR_SHORT]` 지시를 옮긴 것이다. 그쪽 입력 항목은 `[Short Film is about]`, `[Visual Style]`, `[Video duration]`, 예고편형은 `[Plot Script]`, `[Film Genre]`이다. 이 스킬의 Intake와 질문이 같은 항목을 채운다.
 
 ## 3-1 로그라인
 
@@ -97,14 +96,12 @@ craft-rules.md 2절의 길이별 템플릿으로 비트를 나눠라.
 ```
 최종 시나리오를 컷으로 나눠라. 컷 하나 = 주요 행동 하나, 3~10초.
 shot 필드: id, order, duration_ms, action, camera(숏 크기, 앵글, 움직임), characters, objects,
-start_state, end_state(다음 컷 start_state와 이어지게), dialogue[{character, text}], sfx, mode, chain_from.
+start_state, end_state(다음 컷 start_state와 이어지게), dialogue[{character, text}], sfx, chain_from.
 scene 필드: id, order, title, world_id, summary, spatial_anchor, lighting, shots[].
 shots는 반드시 해당 scene 객체 안에 넣는다. 최상위 shots 배열을 만들지 않는다.
 shot id는 "<scene id>-<번호>"(예: S1-1). 기존 샷이 있으면 그 id를 유지한다.
 새 샷은 그 씬에서 아직 쓰지 않은 다음 번호를 쓰고(사이에 끼워도 S1-5처럼), 순서는 order로 정한다.
-mode: 인물 1명 → image2video, 인물 2명 이상이나 소품이 중요 → reference2video,
-      인물 없는 인서트·풍경 → text2video. mode 값은 이 셋과 element2video, extend, modify만 쓴다.
-chain_from: 앞 컷과 동작이 이어지면 직전 샷 id, 아니면 null. (chain_from은 mode 값이 아니다)
+chain_from: 앞 컷과 동작이 이어지면 직전 샷 id, 아니면 null.
 dialogue.character는 바이블 id(예: ch_gumiho)로 쓴다. 내레이션은 {"character": "narrator", "text": ""}로
 쓰고 바이블에 없어도 된다. narrator는 dialogue에만 쓰고 shot.characters에는 넣지 않는다. 대사 줄 앞 이름을 id로 바꾸는 표를 변환 전에 만든다.
 world_id는 bible.worlds에 있는 id여야 한다. 없으면 먼저 worlds에 추가한다.

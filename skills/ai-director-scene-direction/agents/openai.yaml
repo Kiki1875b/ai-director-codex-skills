@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI 장면 연출"
+  short_description: "장면 관점, 감정 비트, 배우 블로킹, 시선 인계"
+  default_prompt: "Use $ai-director-scene-direction to plan the beats and blocking of the next scene."
